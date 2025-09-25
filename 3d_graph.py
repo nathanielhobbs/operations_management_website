@@ -5,7 +5,7 @@ from scipy.optimize import linprog
 
 st.title("3D Linear Programming Visualizer (Interactive)")
 
-print('this is maya!')
+print('this is maya!!')
 
 # -----------------------------
 # Sidebar Inputs
