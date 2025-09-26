@@ -3,29 +3,102 @@ import numpy as np
 import plotly.graph_objects as go
 from scipy.optimize import linprog
 
-st.title("3D Linear Programming Visualizer (Interactive)")
+st.set_page_config(layout="wide")
 
-print('this is maya!!')
+# Session state (dynamic constraints)
+if "constraints" not in st.session_state:
+    # Each constraint row: {"a1": float, "a2": float, "op": str, "b": float}
+    st.session_state.constraints = [{"a1": 1.0, "a2": 1.0, "op": "≤", "b": 10.0}]
 
-# -----------------------------
-# Sidebar Inputs
-# -----------------------------
-st.sidebar.header("Objective Function")
-c1 = st.sidebar.number_input("Coefficient for x1 (c1)", value=2.0)
-c2 = st.sidebar.number_input("Coefficient for x2 (c2)", value=3.0)
+OPS = ["<", "≤", "=", "≥", ">"]  # dropdown operators
 
-show_obj = st.sidebar.checkbox("Show Objective Plane", value=True)
-maximize = st.sidebar.checkbox("Maximize objective?", value=True)
+def add_constraint():
+    st.session_state.constraints.append({"a1": 1.0, "a2": 1.0, "op": "≤", "b": 10.0})
 
-st.sidebar.header("Constraints (Ax ≤ b)")
-n_constraints = st.sidebar.number_input("Number of constraints", min_value=1, max_value=5, value=2)
+def remove_constraint(i: int):
+    if len(st.session_state.constraints) > 1:
+        st.session_state.constraints.pop(i)
 
-constraints = []
-for i in range(int(n_constraints)):
-    a1 = st.sidebar.number_input(f"Constraint {i+1}: coeff of x1", value=1.0, key=f"a1_{i}")
-    a2 = st.sidebar.number_input(f"Constraint {i+1}: coeff of x2", value=1.0, key=f"a2_{i}")
-    b = st.sidebar.number_input(f"Constraint {i+1}: RHS (b)", value=10.0, key=f"b_{i}")
-    constraints.append((a1, a2, b))
+# Objective Function
+st.subheader("Objective Function")
+
+colA, colB, colC = st.columns([1.2, 1, 1])
+with colA:
+    sense = st.radio("Optimize", ["Maximize", "Minimize"], horizontal=True, index=0)
+
+# Mini headings directly above each field
+with colB:
+    c1 = st.number_input("c₁ (coefficient of x₁)", value=2.0, step=0.1, format="%.2f")
+with colC:
+    c2 = st.number_input("c₂ (coefficient of x₂)", value=3.0, step=0.1, format="%.2f")
+
+# Objective function preview
+st.markdown(f"**Objective:** Z = {c1}·x₁ + {c2}·x₂")
+
+st.divider()
+
+# Constraints (Subject to)
+st.subheader("subject to")
+st.caption("Enter each constraint as a₁·x₁ + a₂·x₂ (operation) b")
+
+for i, con in enumerate(st.session_state.constraints):
+    c_a1, c_a2, c_op, c_b, c_act = st.columns([1, 1, 0.9, 1, 1.2])
+
+    with c_a1:
+        st.session_state.constraints[i]["a1"] = st.number_input(
+            f"a₁ (coefficient of x₁) — row {i+1}", value=float(con["a1"]),
+            step=0.1, format="%.4f", key=f"a1_{i}"
+        )
+    with c_a2:
+        st.session_state.constraints[i]["a2"] = st.number_input(
+            f"a₂ (coefficient of x₂) — row {i+1}", value=float(con["a2"]),
+            step=0.1, format="%.4f", key=f"a2_{i}"
+        )
+    with c_op:
+        st.session_state.constraints[i]["op"] = st.selectbox(
+            f"Operator — row {i+1}", ["<","≤","=","≥",">"],
+            index=["<","≤","=","≥",">"].index(con["op"]), key=f"op_{i}"
+        )
+    with c_b:
+        st.session_state.constraints[i]["b"] = st.number_input(
+            f"b (RHS) — row {i+1}", value=float(con["b"]),
+            step=0.1, format="%.4f", key=f"b_{i}"
+        )
+    with c_act:
+        # fake label so button aligns with inputs that have labels
+        st.markdown("<div style='height:1.9em'></div>", unsafe_allow_html=True)
+        if i == 0:
+            st.button("Add constraint", key=f"add_{i}", use_container_width=True, on_click=add_constraint)
+        else:
+            st.button("Remove", key=f"remove_{i}", use_container_width=True,
+                      on_click=lambda idx=i: remove_constraint(idx))
+
+# Non-negativity in constraint section
+nonneg = st.checkbox("Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)", value=True)
+
+# Full model preview
+with st.expander("Model Preview"):
+    opt_word = "maximize" if sense == "Maximize" else "minimize"
+    st.write(f"{opt_word}  Z = {c1}·x₁ + {c2}·x₂")
+    st.write("subject to:")
+    for con in st.session_state.constraints:
+        a1 = con["a1"]; a2 = con["a2"]; op = con["op"]; b = con["b"]
+        # Show +/− properly for the a2 term in plain text
+        term2 = f"+ {abs(a2)}·x₂" if a2 >= 0 else f"- {abs(a2)}·x₂"
+        st.write(f"  {a1}·x₁ {term2} {op} {b}")
+    if nonneg:
+        st.write("  x₁ ≥ 0, x₂ ≥ 0")
+
+st.divider()
+
+# Action buttons
+spacer_left, col1, col2, spacer_right = st.columns([1, 2, 2, 1])
+
+with col1:
+    st.button("Compute Feasible Solutions", type="primary", use_container_width=True)
+
+with col2:
+    st.button("Solve for Optimal Solution", use_container_width=True)
 
 # -----------------------------
 # Solve LP
