@@ -24,13 +24,13 @@ st.subheader("Objective Function")
 
 colA, colB, colC = st.columns([1.2, 1, 1])
 with colA:
-    sense = st.radio("Optimize", ["Maximize", "Minimize"], horizontal=True, index=0)
+    sense = st.radio("", ["Maximize", "Minimize"], horizontal=True, index=0)
 
 # Mini headings directly above each field
 with colB:
-    c1 = st.number_input("c₁ (coefficient of x₁)", value=2.0, step=0.1, format="%.2f")
+    c1 = st.number_input("c₁ (coefficient of x₁)", value=2.0, step=0.5, format="%.2f")
 with colC:
-    c2 = st.number_input("c₂ (coefficient of x₂)", value=3.0, step=0.1, format="%.2f")
+    c2 = st.number_input("c₂ (coefficient of x₂)", value=3.0, step=0.5, format="%.2f")
 
 # Objective function preview
 st.markdown(f"**Objective:** Z = {c1}·x₁ + {c2}·x₂")
@@ -46,23 +46,23 @@ for i, con in enumerate(st.session_state.constraints):
 
     with c_a1:
         st.session_state.constraints[i]["a1"] = st.number_input(
-            f"a₁ (coefficient of x₁) — row {i+1}", value=float(con["a1"]),
-            step=0.1, format="%.4f", key=f"a1_{i}"
+            f"a₁ (coefficient of x₁)", value=float(con["a1"]),
+            step=0.5, format="%.2f", key=f"a1_{i}"
         )
     with c_a2:
         st.session_state.constraints[i]["a2"] = st.number_input(
-            f"a₂ (coefficient of x₂) — row {i+1}", value=float(con["a2"]),
-            step=0.1, format="%.4f", key=f"a2_{i}"
+            f"a₂ (coefficient of x₂)", value=float(con["a2"]),
+            step=0.5, format="%.2f", key=f"a2_{i}"
         )
     with c_op:
         st.session_state.constraints[i]["op"] = st.selectbox(
-            f"Operator — row {i+1}", ["<","≤","=","≥",">"],
+            f"Operator", ["<","≤","=","≥",">"],
             index=["<","≤","=","≥",">"].index(con["op"]), key=f"op_{i}"
         )
     with c_b:
         st.session_state.constraints[i]["b"] = st.number_input(
-            f"b (RHS) — row {i+1}", value=float(con["b"]),
-            step=0.1, format="%.4f", key=f"b_{i}"
+            f"b (RHS)", value=float(con["b"]),
+            step=0.5, format="%.2f", key=f"b_{i}"
         )
     with c_act:
         # fake label so button aligns with inputs that have labels
