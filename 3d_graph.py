@@ -5,12 +5,24 @@ from scipy.optimize import linprog
 
 st.title("3D Linear Programming Visualizer (Interactive)")
 
+# C = st.number_input('Select a value for C', value=5)
+# X = st.number_input('Select a value for X', value=5)
+# c = st.number_input('Select a value for c', value=5)
+# x = st.number_input('Select a value for x', value=5)
+
+# st.latex(f"Z = (C)X + (c)x = ({C}){X} + ({c}){x} = {C*X} + {c*x} = {C*X + c*x}")
+#st.latex(f"Z = (c1)x1 + (c2)x2 = ({C})x1 + ({c})x2 = ")
+
 # -----------------------------
 # Sidebar Inputs
 # -----------------------------
 st.sidebar.header("Objective Function")
 c1 = st.sidebar.number_input("Coefficient for x1 (c1)", value=2.0)
 c2 = st.sidebar.number_input("Coefficient for x2 (c2)", value=3.0)
+
+C7 = st.sidebar.number_input('Select a value for c1', value=5)
+c8 = st.sidebar.number_input('Select a value for c2', value=5)
+
 
 show_obj = st.sidebar.checkbox("Show Objective Plane", value=True)
 maximize = st.sidebar.checkbox("Maximize objective?", value=True)
@@ -83,6 +95,8 @@ if res.success:
         marker=dict(size=6, color="red"),
         name="Optimal Solution"
     ))
+    st.latex(f"Objective Function: Z = (c1)x1 + (c2)x2 = ({c1})x1 + ({c2})x2 = {c1*x_opt[0]:.2f} + {c2*x_opt[1]:.2f} = {c1*x_opt[0] + c2*x_opt[1]:.2f}")
+    
     st.success(f"Optimal solution: x1 = {x_opt[0]:.2f}, x2 = {x_opt[1]:.2f}, objective = {z_opt:.2f}")
 else:
     st.error("No feasible solution found.")
@@ -97,6 +111,8 @@ fig.update_layout(
     margin=dict(l=0, r=0, t=40, b=0),
     height=700
 )
+
+#st.latex(f"Z = (c1)x1 + (c2)x2 = ({C7})x1 + ({c8})x2 = ({C7}){x_opt} + ({c8}){x_opt} = {C7*x_opt} + {c8*x_opt} = {C7*x_opt + c8*x_opt}")
 
 st.plotly_chart(fig, use_container_width=True)
 
