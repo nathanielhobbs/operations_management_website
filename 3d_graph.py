@@ -73,6 +73,7 @@ for i, con in enumerate(st.session_state.constraints):
             st.button("Remove", key=f"remove_{i}", use_container_width=True,
                       on_click=lambda idx=i: remove_constraint(idx))
 
+print(st.session_state.constraints)
 # Non-negativity in constraint section
 nonneg = st.checkbox("Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)", value=True)
 
@@ -103,8 +104,25 @@ with col2:
 # -----------------------------
 # Solve LP
 # -----------------------------
-A = np.array([[a1, a2] for (a1, a2, _) in constraints])
-b = np.array([rhs for (_, _, rhs) in constraints])
+# e.g. if constraints [(2,3,5), (56,32,1)]
+# then A will be np.array([[2,3],[56,32]])
+# and b will be np.array([5, 1])
+# this is using "list comprehension"
+#A = np.array([[a1, a2] for (a1, a2, _) in constraints])
+#b = np.array([rhs for (_, _, rhs) in constraints])
+
+# a quick note on list comprehension:
+# A = np.array([[a1, a2] for (a1, a2, _) in constraints])
+# is the same as
+# nested_list = []
+# for (a1,a2,_) in constraints:
+#   nested_list.append([a1,a2])
+# A = np.array(nested_list)
+
+# st.session_state.constraints looks like [{'a1': 1.0, 'a2': 1.0, 'op': '≤', 'b': 10.0}]
+A = np.array([[my_dict['a1'],my_dict['a2']] for my_dict in st.session_state.constraints])
+b = np.array([my_dict['b'] for my_dict in st.session_state.constraints])
+print(f"{A=},{b=}")
 
 c = np.array([c1, c2])
 if maximize:
