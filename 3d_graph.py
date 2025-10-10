@@ -5,9 +5,8 @@ from scipy.optimize import linprog
 
 st.set_page_config(layout="wide")
 
-# -----------------------------
 # Session state (dynamic constraints)
-# -----------------------------
+
 if "constraints" not in st.session_state:
     # Each constraint row: {"a1": float, "a2": float, "op": str, "b": float}
     st.session_state.constraints = [{"a1": 1.0, "a2": 1.0, "op": "≤", "b": 10.0}]
@@ -21,9 +20,7 @@ def remove_constraint(i: int):
     if len(st.session_state.constraints) > 1:
         st.session_state.constraints.pop(i)
 
-# -----------------------------
 # Objective Function UI
-# -----------------------------
 st.subheader("Objective Function")
 
 # widen the last column so the label fits
@@ -56,9 +53,7 @@ st.markdown(f"**Objective:** Z = {c1}·x₁ + {c2}·x₂")
 st.divider()
 
 
-# -----------------------------
 # Constraints (Subject to)
-# -----------------------------
 st.subheader("subject to")
 st.caption("Enter each constraint as a₁·x₁ + a₂·x₂ (operation) b")
 
@@ -97,9 +92,7 @@ for i, con in enumerate(st.session_state.constraints):
 # Non-negativity in constraint section
 nonneg = st.checkbox("Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)", value=True)
 
-# -----------------------------
-# Helper: convert ops to standard LP matrices
-# -----------------------------
+# Converting ops to standard LP matrices
 def to_standard_matrices():
     A_ub, b_ub, A_eq, b_eq = [], [], [], []
     for con in st.session_state.constraints:
@@ -117,9 +110,7 @@ def to_standard_matrices():
     b_eq = np.array(b_eq) if b_eq else None
     return A_ub, b_ub, A_eq, b_eq
 
-# -----------------------------
 # Solve LP
-# -----------------------------
 A_ub, b_ub, A_eq, b_eq = to_standard_matrices()
 c = np.array([c1, c2])
 c_obj = -c if sense == "Maximize" else c
@@ -127,9 +118,7 @@ bounds = [(0, None), (0, None)] if nonneg else [(None, None), (None, None)]
 
 res = linprog(c_obj, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
 
-# -----------------------------
 # Create grid for plotting
-# -----------------------------
 x1 = np.linspace(0, 10, 200)
 x2 = np.linspace(0, 10, 200)
 X1, X2 = np.meshgrid(x1, x2)
@@ -148,9 +137,7 @@ for con in st.session_state.constraints:
         cond = np.isclose(expr, b, atol=1e-6)
     mask &= cond
 
-# -----------------------------
-# Build Plotly Figure (3D)
-# -----------------------------
+# Build Plotly Figure
 fig = go.Figure()
 
 # Feasible region as a 2D contour "shadow" at z=0 (for context)
