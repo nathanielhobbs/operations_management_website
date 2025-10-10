@@ -5,27 +5,101 @@ from scipy.optimize import linprog
 
 st.title("3D Linear Programming Visualizer (Interactive)")
 
-# C = st.number_input('Select a value for C', value=5)
-# X = st.number_input('Select a value for X', value=5)
-# c = st.number_input('Select a value for c', value=5)
-# x = st.number_input('Select a value for x', value=5)
-
-# st.latex(f"Z = (C)X + (c)x = ({C}){X} + ({c}){x} = {C*X} + {c*x} = {C*X + c*x}")
-#st.latex(f"Z = (c1)x1 + (c2)x2 = ({C})x1 + ({c})x2 = ")
 
 # -----------------------------
 # Sidebar Inputs
 # -----------------------------
-st.sidebar.header("Objective Function")
-c1 = st.sidebar.number_input("Coefficient for x1 (c1)", value=2.0)
-c2 = st.sidebar.number_input("Coefficient for x2 (c2)", value=3.0)
 
-C7 = st.sidebar.number_input('Select a value for c1', value=5)
-c8 = st.sidebar.number_input('Select a value for c2', value=5)
+# st.sidebar.header("Objective Function")
+# c1 = st.sidebar.number_input("Coefficient for x1 (c1)", value=2.0)
+# c2 = st.sidebar.number_input("Coefficient for x2 (c2)", value=3.0)
 
 
-show_obj = st.sidebar.checkbox("Show Objective Plane", value=True)
-maximize = st.sidebar.checkbox("Maximize objective?", value=True)
+# -----------------------------
+# Center Screen Inputs
+# -----------------------------
+
+# Callback functions to update c1 and c2
+def update_c1():
+    st.session_state.c1 = st.session_state.c1_input
+    st.session_state.show_c1_input = False  # Optionally hide input after change
+
+def update_c2():
+    st.session_state.c2 = st.session_state.c2_input
+    st.session_state.show_c2_input = False  # Optionally hide input after change
+
+def update_constraints():
+    st.session_state.constraints = st.session_state.constraints_input
+    st.session_state.show_constraints_input = False
+
+# Initialize session state variables
+if "c1" not in st.session_state:
+    st.session_state.c1 = 1
+if "c2" not in st.session_state:
+    st.session_state.c2 = 1
+if "constraints" not in st.session_state:
+    st.session_state.constraints = 0
+if 'show_c1_input' not in st.session_state:
+    st.session_state.show_c1_input = False
+if 'show_c2_input' not in st.session_state:
+    st.session_state.show_c2_input = False
+if 'show_constraints_input' not in st.session_state:
+    st.session_state.show_constraints_input = False
+
+
+# Functions to show input for c1 and c2
+def show_c1_input():
+    st.session_state.show_c1_input = True
+
+def show_c2_input():
+    st.session_state.show_c2_input = True
+
+def show_constraints_input():
+    st.session_state.show_constraints_input = True
+
+flex = st.container(horizontal=True)
+flex.button("Value of c1", on_click=show_c1_input)
+flex.button("Value of c2", on_click=show_c2_input)
+flex.button("Number of Constraints", on_click=show_constraints_input)
+
+# Show input boxes if corresponding button was clicked, with callbacks
+if st.session_state.show_c1_input:
+    st.number_input(
+        "Set c1",
+        value=st.session_state.c1,
+        key="c1_input",
+        on_change=update_c1
+    )
+    #Optionally, hide input after change
+    st.session_state.show_c1_input = False
+
+if st.session_state.show_c2_input:
+    st.number_input(
+        "Set c2",
+        value=st.session_state.c2,
+        key="c2_input",
+        on_change=update_c2
+    )
+    # Optionally, hide input after change
+    st.session_state.show_c2_input = False
+
+if st.session_state.show_constraints_input:
+    st.number_input(
+        "Set Number of Constraints",
+        value=st.session_state.constraints,
+        key="constraints_input",
+        on_change=update_constraints
+    )
+
+# Values for calculation
+c1 = st.session_state.c1
+c2 = st.session_state.c2
+n_constraints = st.session_state.constraints
+
+dex = st.container(horizontal=True)
+show_obj = dex.checkbox("Show Objective Plane", value=True)
+maximize = dex.checkbox("Maximize objective", value=True)
+minimize = dex.checkbox("Minimize objective", value=True)
 
 st.sidebar.header("Constraints (Ax ≤ b)")
 n_constraints = st.sidebar.number_input("Number of constraints", min_value=1, max_value=5, value=2)
@@ -95,11 +169,75 @@ if res.success:
         marker=dict(size=6, color="red"),
         name="Optimal Solution"
     ))
-    st.latex(f"Objective Function: Z = (c1)x1 + (c2)x2 = ({c1})x1 + ({c2})x2 = {c1*x_opt[0]:.2f} + {c2*x_opt[1]:.2f} = {c1*x_opt[0] + c2*x_opt[1]:.2f}")
-    
+
+
     st.success(f"Optimal solution: x1 = {x_opt[0]:.2f}, x2 = {x_opt[1]:.2f}, objective = {z_opt:.2f}")
 else:
     st.error("No feasible solution found.")
+
+st.latex(f"Objective Function: Z = (c1)x1 + (c2)x2 = ({st.session_state.c1})x1 + ({st.session_state.c2})x2 = {st.session_state.c1*x_opt[0]:.2f} + {st.session_state.c2*x_opt[1]:.2f} = {st.session_state.c1*x_opt[0] + st.session_state.c2*x_opt[1]:.2f}")
+
+
+# # -----------------------------
+# # Center Screen Inputs
+# # -----------------------------
+
+# # Callback functions to update c1 and c2
+# def update_c1():
+#     st.session_state.c1 = st.session_state.c1_input
+#     st.session_state.show_c1_input = False  # Optionally hide input after change
+
+# def update_c2():
+#     st.session_state.c2 = st.session_state.c2_input
+#     st.session_state.show_c2_input = False  # Optionally hide input after change
+
+# # Initialize session state variables
+# if "c1" not in st.session_state:
+#     st.session_state.c1 = 1
+# if "c2" not in st.session_state:
+#     st.session_state.c2 = 1
+# if 'show_c1_input' not in st.session_state:
+#     st.session_state.show_c1_input = False
+# if 'show_c2_input' not in st.session_state:
+#     st.session_state.show_c2_input = False
+
+
+# # Functions to show input for c1 and c2
+# def show_c1_input():
+#     st.session_state.show_c1_input = True
+
+# def show_c2_input():
+#     st.session_state.show_c2_input = True
+
+# flex = st.container(horizontal=True)
+# flex.button("Value of c1", on_click=show_c1_input)
+# flex.button("Value of c2", on_click=show_c2_input)
+# #flex.button()
+
+# # Show input boxes if corresponding button was clicked, with callbacks
+# if st.session_state.show_c1_input:
+#     st.number_input(
+#         "Set c1",
+#         value=st.session_state.c1,
+#         key="c1_input",
+#         on_change=update_c1
+#     )
+#     #Optionally, hide input after change
+#     st.session_state.show_c1_input = False
+
+# if st.session_state.show_c2_input:
+#     st.number_input(
+#         "Set c2",
+#         value=st.session_state.c2,
+#         key="c2_input",
+#         on_change=update_c2
+#     )
+#     # Optionally, hide input after change
+#     st.session_state.show_c2_input = False
+    
+    
+# st.latex(f"Objective Function: Z = (c1)x1 + (c2)x2 = ({st.session_state.c1})x1 + ({st.session_state.c2})x2 = {st.session_state.c1*x_opt[0]:.2f} + {st.session_state.c2*x_opt[1]:.2f} = {st.session_state.c1*x_opt[0] + st.session_state.c2*x_opt[1]:.2f}")
+
 
 # Layout
 fig.update_layout(
@@ -112,7 +250,6 @@ fig.update_layout(
     height=700
 )
 
-#st.latex(f"Z = (c1)x1 + (c2)x2 = ({C7})x1 + ({c8})x2 = ({C7}){x_opt} + ({c8}){x_opt} = {C7*x_opt} + {c8*x_opt} = {C7*x_opt + c8*x_opt}")
 
 st.plotly_chart(fig, use_container_width=True)
 
