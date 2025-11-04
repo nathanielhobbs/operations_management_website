@@ -7,7 +7,6 @@ st.set_page_config(layout="wide")
 
 # Session state (dynamic constraints)
 if "constraints" not in st.session_state:
-    # Each constraint row: {"a1": float, "a2": float, "op": str, "b": float, "enabled": bool}
     st.session_state.constraints = [{"a1": 1.0, "a2": 1.0, "op": "≤", "b": 10.0, "enabled": True}]
 else:
     # Migration: add enabled flag if missing
@@ -358,7 +357,7 @@ def constraint_segment(a1, a2, b, xmin, xmax, ymin, ymax):
 
 # === Build Plotly Figure (3D if show_obj, else 2D) ===
 if show_obj:
-    # ---------- 3D MODE ----------
+    # 3D MODE
     fig = go.Figure()
 
     # Base objective surface
@@ -370,7 +369,7 @@ if show_obj:
         name="Objective Plane"
     ))
 
-    # Feasible region overlay (lifted slightly if desired)
+    # Feasible region overlay
     lift = 0.15
     Z_feas = np.where(mask, Z + lift, np.nan)
     fig.add_trace(go.Surface(
@@ -381,7 +380,7 @@ if show_obj:
         name="Feasible Region"
     ))
 
-    # Constraint boundary lines (on the plane)
+    # Constraint boundary lines
     constraint_colors = [
         "#d62728", "#2ca02c", "#1f77b4", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2"
     ]
@@ -409,7 +408,7 @@ if show_obj:
             hovertemplate="x₁=%{x:.3f}<br>x₂=%{y:.3f}<br>Z=%{z:.3f}<extra></extra>",
         ))
     
-    # --- Objective level lines (3D), if any ---
+    # Objective level lines (3D)
     if z_levels:
         for z0 in z_levels:
             seg = constraint_segment(c1, c2, z0, xmin, xmax, ymin, ymax)
@@ -455,7 +454,7 @@ if show_obj:
     )
 
 else:
-    # ---------- 2D MODE ----------
+    # 2D MODE
     fig = go.Figure()
 
     # Feasible region shading: show as a heatmap (1 for feasible, NaN for not)
@@ -493,7 +492,7 @@ else:
             hovertemplate="x₁=%{x:.3f}<br>x₂=%{y:.3f}<extra></extra>",
         ))
 
-    # --- Objective level lines (2D), if any ---
+    # Objective level lines (2D)
     if z_levels:
         for z0 in z_levels:
             seg = constraint_segment(c1, c2, z0, xmin, xmax, ymin, ymax)
@@ -537,5 +536,4 @@ else:
         yaxis=dict(scaleanchor="x", scaleratio=1)  # keep aspect ratio square-ish
     )
 
-# Render chart
 st.plotly_chart(fig, use_container_width=True)
