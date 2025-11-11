@@ -281,7 +281,7 @@ def compute_axis_max(constraints, safety: float = 1.1) -> float:
     base = max(candidates) if candidates else 100.0  # sensible fallback
     return float(base * safety)
 
-# --- Dynamic scaling based on constraints ---
+# Dynamic scaling based on constraints
 axis_max = compute_axis_max(st.session_state.constraints, safety=1.1)
 
 # Keep lower bound at 0 for your current nonneg modeling;
@@ -355,7 +355,7 @@ def constraint_segment(a1, a2, b, xmin, xmax, ymin, ymax):
                 maxd = d2; best = (uniq[i], uniq[j])
     return best
 
-# === Build Plotly Figure (3D if show_obj, else 2D) ===
+# Build Plotly Figure (3D if show_obj, else 2D)
 if show_obj:
     # 3D MODE
     fig = go.Figure()
@@ -457,10 +457,10 @@ else:
     # 2D MODE
     fig = go.Figure()
 
-    # Feasible region shading: show as a heatmap (1 for feasible, NaN for not)
+    # Feasible region shading (2D) — FIXED
     feas_numeric = np.where(mask, 1.0, np.nan)
     fig.add_trace(go.Heatmap(
-        x=x1, y=x2, z=feas_numeric.T,  # transpose so axes align with x1 (x) and x2 (y)
+        x=x1, y=x2, z=feas_numeric,   # ← was feas_numeric.T
         colorscale="Blues",
         showscale=False,
         opacity=0.6,
@@ -533,7 +533,7 @@ else:
         margin=dict(l=0, r=0, t=40, b=0),
         height=700,
         legend=dict(itemsizing="constant"),
-        yaxis=dict(scaleanchor="x", scaleratio=1)  # keep aspect ratio square-ish
+        yaxis=dict(scaleanchor="x", scaleratio=1)
     )
 
 st.plotly_chart(fig, use_container_width=True)
