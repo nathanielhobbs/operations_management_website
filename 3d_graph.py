@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 from scipy.optimize import linprog
+import plotly.io as pio
+from copy import deepcopy
 
 st.set_page_config(layout="wide")
 
@@ -18,14 +20,48 @@ else:
 if "z_levels" not in st.session_state:
     st.session_state.z_levels = []
 
+# Storage for saved optimal solutions
+if "saved_solutions" not in st.session_state:
+    st.session_state.saved_solutions = []
+
 OPS = ["<", "≤", "=", "≥", ">"]
+
+# Predefined examples
+EXAMPLES = {
+    "Example 1 – Maximize profit": {
+        "sense": "Maximize",
+        "c": [10.0, 15.0],  # Z = 10 x1 + 15 x2
+        "constraints": [
+            {"a1": 1.0, "a2": 2.0, "op": "≤", "b": 40.0, "enabled": True},
+            {"a1": 3.0, "a2": 1.0, "op": "≤", "b": 45.0, "enabled": True},
+        ],
+        "nonneg": True,
+        "z_levels": [200.0, 300.0],
+    },
+    "Example 2 – Minimize cost": {
+        "sense": "Minimize",
+        "c": [4.0, 6.0],  # Z = 4 x1 + 6 x2
+        "constraints": [
+            {"a1": 2.0, "a2": 1.0, "op": "≥", "b": 10.0, "enabled": True},
+            {"a1": 1.0, "a2": 3.0, "op": "≥", "b": 15.0, "enabled": True},
+        ],
+        "nonneg": True,
+        "z_levels": [40.0, 60.0],
+    },
+}
 
 def fmt(num):
     """Return an int if whole number, else a rounded float."""
     return int(num) if float(num).is_integer() else round(num, 2)
 
 def num_input_no_step(label: str, default: float | int, key: str, disabled: bool = False) -> float:
-    s = st.text_input(label, value=str(default), key=key, disabled=disabled)
+    # If the widget already has a value in session_state, let Streamlit use that.
+    # Otherwise, provide the initial default.
+    if key in st.session_state:
+        s = st.text_input(label, key=key, disabled=disabled)
+    else:
+        s = st.text_input(label, value=str(default), key=key, disabled=disabled)
+
     try:
         return float(str(s).strip())
     except ValueError:
@@ -44,7 +80,39 @@ def remove_constraint(i: int):
     if len(st.session_state.constraints) > 1:
         st.session_state.constraints.pop(i)
 
-# --- Z helpers ---
+def load_example(name: str):
+    """Load a predefined example into session_state and rerun."""
+    ex = EXAMPLES[name]
+
+    # Constraints and Z levels
+    st.session_state.constraints = deepcopy(ex["constraints"])
+    st.session_state.z_levels = list(ex.get("z_levels", []))
+
+    # Objective params
+    st.session_state["c1"] = str(ex["c"][0])
+    st.session_state["c2"] = str(ex["c"][1])
+    st.session_state["sense"] = ex["sense"]
+
+    # Non-negativity
+    st.session_state["nonneg"] = ex.get("nonneg", True)
+
+    st.rerun()
+
+# Sidebar: Load examples 
+sidebar = st.sidebar
+sidebar.header("Examples")
+
+example_names = list(EXAMPLES.keys())
+selected_example = sidebar.selectbox(
+    "Choose an example to load",
+    ["(none)"] + example_names,
+    key="example_selector",
+)
+
+if selected_example != "(none)" and sidebar.button("Load example", key="load_example_btn"):
+    load_example(selected_example)
+
+# Z helpers 
 def _parse_single_z(text: str) -> float:
     s = str(text).strip()
     s = s.replace(",", "")
@@ -82,13 +150,23 @@ st.subheader("Objective Function")
 colA, colB, colPlus, colC, colD = st.columns([1.2, 1.4, 0.2, 1.4, 1.6])
 
 with colA:
-    sense = st.radio(
-        "Objective direction",
-        ["Maximize", "Minimize"],
-        horizontal=True,
-        index=0,
-        label_visibility="collapsed",
-    )
+    if "sense" in st.session_state:
+        sense = st.radio(
+            "Objective direction",
+            ["Maximize", "Minimize"],
+            horizontal=True,
+            key="sense",
+            label_visibility="collapsed",
+        )
+    else:
+        sense = st.radio(
+            "Objective direction",
+            ["Maximize", "Minimize"],
+            horizontal=True,
+            index=0,
+            key="sense",
+            label_visibility="collapsed",
+        )
 
 # c1 · x1
 with colB:
@@ -147,8 +225,19 @@ with left:
     st.markdown("<div style='margin-top:0.6rem;'>Z =</div>", unsafe_allow_html=True)
 
 with mid:
-    st.text_input("Z value", value=st.session_state.get("z_input", ""), key="z_input",
-                  label_visibility="collapsed")
+    if "z_input" in st.session_state:
+        st.text_input(
+            "Z value",
+            key="z_input",
+            label_visibility="collapsed",
+        )
+    else:
+        st.text_input(
+            "Z value",
+            value="",
+            key="z_input",
+            label_visibility="collapsed",
+        )
 
 with right:
     st.button("Add Z value", key="add_z_btn", use_container_width=True, on_click=_add_z_from_state)
@@ -231,7 +320,17 @@ for i, con in enumerate(st.session_state.constraints):
 
 
 # Non-negativity in constraint section
-nonneg = st.checkbox("Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)", value=True)
+if "nonneg" in st.session_state:
+    nonneg = st.checkbox(
+        "Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)",
+        key="nonneg",
+    )
+else:
+    nonneg = st.checkbox(
+        "Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)",
+        value=True,
+        key="nonneg",
+    )
 
 # Converting ops to standard LP matrices
 def to_standard_matrices():
@@ -355,8 +454,13 @@ def constraint_segment(a1, a2, b, xmin, xmax, ymin, ymax):
                 maxd = d2; best = (uniq[i], uniq[j])
     return best
 
+# will hold current optimal solution (if any)
+x_opt = None
+z_opt = None
+
 # Build Plotly Figure (3D if show_obj, else 2D)
 if show_obj:
+    
     # 3D MODE
     fig = go.Figure()
 
@@ -442,16 +546,27 @@ if show_obj:
     else:
         st.error(f"Solve failed (status {res.status}): {res.message}")
 
+    # 3D camera so it looks clearly 3D (not top-down)
+    camera = dict(
+        eye=dict(x=1.6, y=1.6, z=0.9)  # tweak to taste
+    )
+
     fig.update_layout(
         scene=dict(
             xaxis_title="x₁",
             yaxis_title="x₂",
-            zaxis_title="Objective value (Z)"
+            zaxis_title="Objective value (Z)",
+            camera=camera,
         ),
+        template="plotly_dark",                  
+        paper_bgcolor="rgba(0, 0, 0, 1)",         # dark background
+        plot_bgcolor="rgba(0, 0, 0, 1)",
         margin=dict(l=0, r=0, t=40, b=0),
         height=700,
         legend=dict(itemsizing="constant")
     )
+
+    ## fig.update_layout({"uirevision": "foo"}, overwrite=True)
 
 else:
     # 2D MODE
@@ -516,6 +631,7 @@ else:
     # Optimal solution marker (2D)
     if res.success:
         x_opt = res.x
+        z_opt = c1 * x_opt[0] + c2 * x_opt[1]
         fig.add_trace(go.Scatter(
             x=[x_opt[0]], y=[x_opt[1]],
             mode="markers+text",
@@ -524,16 +640,83 @@ else:
             marker=dict(size=8, color="red", symbol="x"),
             name="Optimal Solution"
         ))
+
     else:
         st.error(f"Solve failed (status {res.status}): {res.message}")
 
     fig.update_layout(
         xaxis_title="x₁",
         yaxis_title="x₂",
+        template="plotly_dark",             # dark
+        paper_bgcolor="rgba(0, 0, 0, 1)",
+        plot_bgcolor="rgba(0, 0, 0, 1)",
         margin=dict(l=0, r=0, t=40, b=0),
         height=700,
         legend=dict(itemsizing="constant"),
         yaxis=dict(scaleanchor="x", scaleratio=1)
     )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(
+    fig,
+    use_container_width=True,
+    config={"toImageButtonOptions": {"format": "png", "filename": "lp_graph"}}
+)
+
+# Sidebar: Saved solutions
+sidebar = st.sidebar
+sidebar.header("Saved solutions")
+
+# Only allow saving if we actually have a successful optimum
+if res.success and x_opt is not None and z_opt is not None:
+    default_label = f"{sense} Z with c₁={fmt(c1)}, c₂={fmt(c2)}"
+    save_label = sidebar.text_input(
+        "Label for this solution",
+        value=default_label,
+        key="save_label"
+    )
+
+    if sidebar.button("Save current solution", key="save_solution_btn"):
+
+        fig_for_save = fig
+
+        # Ensure consistent camera
+        fig_for_save.update_layout(
+            scene=dict(
+                camera=dict(eye=dict(x=1.6, y=1.6, z=0.9))
+            )
+        )
+
+        try:
+            img_bytes = fig_for_save.to_image(
+                format="png",
+                width=900,
+                height=700,
+                scale=2,
+            )
+        except Exception as e:
+            sidebar.warning(f"Could not export image: {e}")
+            img_bytes = None
+
+        st.session_state.saved_solutions.append(
+            {
+                "label": save_label,
+                "x1": float(x_opt[0]),
+                "x2": float(x_opt[1]),
+                "Z": float(z_opt),
+                "image": img_bytes,
+            }
+        )
+        sidebar.success("Solution saved.")
+
+
+# Show saved solutions
+for i, sol in enumerate(st.session_state.saved_solutions):
+    with sidebar.expander(sol["label"], expanded=False):
+        st.write(
+            f"x₁ = {fmt(sol['x1'])}, x₂ = {fmt(sol['x2'])}, Z = {fmt(sol['Z'])}"
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Delete", key=f"del_sol_{i}"):
+                st.session_state.saved_solutions.pop(i)
+                st.rerun()
