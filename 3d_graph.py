@@ -2,8 +2,6 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 from scipy.optimize import linprog
-import plotly.io as pio
-from copy import deepcopy
 
 st.set_page_config(layout="wide")
 
@@ -20,35 +18,7 @@ else:
 if "z_levels" not in st.session_state:
     st.session_state.z_levels = []
 
-# Storage for saved optimal solutions
-if "saved_solutions" not in st.session_state:
-    st.session_state.saved_solutions = []
-
 OPS = ["<", "≤", "=", "≥", ">"]
-
-# Predefined examples
-EXAMPLES = {
-    "Example 1 – Maximize profit": {
-        "sense": "Maximize",
-        "c": [10.0, 15.0],  # Z = 10 x1 + 15 x2
-        "constraints": [
-            {"a1": 1.0, "a2": 2.0, "op": "≤", "b": 40.0, "enabled": True},
-            {"a1": 3.0, "a2": 1.0, "op": "≤", "b": 45.0, "enabled": True},
-        ],
-        "nonneg": True,
-        "z_levels": [200.0, 300.0],
-    },
-    "Example 2 – Minimize cost": {
-        "sense": "Minimize",
-        "c": [4.0, 6.0],  # Z = 4 x1 + 6 x2
-        "constraints": [
-            {"a1": 2.0, "a2": 1.0, "op": "≥", "b": 10.0, "enabled": True},
-            {"a1": 1.0, "a2": 3.0, "op": "≥", "b": 15.0, "enabled": True},
-        ],
-        "nonneg": True,
-        "z_levels": [40.0, 60.0],
-    },
-}
 
 def fmt(num):
     """Return an int if whole number, else a rounded float."""
@@ -79,38 +49,6 @@ def add_constraint():
 def remove_constraint(i: int):
     if len(st.session_state.constraints) > 1:
         st.session_state.constraints.pop(i)
-
-def load_example(name: str):
-    """Load a predefined example into session_state and rerun."""
-    ex = EXAMPLES[name]
-
-    # Constraints and Z levels
-    st.session_state.constraints = deepcopy(ex["constraints"])
-    st.session_state.z_levels = list(ex.get("z_levels", []))
-
-    # Objective params
-    st.session_state["c1"] = str(ex["c"][0])
-    st.session_state["c2"] = str(ex["c"][1])
-    st.session_state["sense"] = ex["sense"]
-
-    # Non-negativity
-    st.session_state["nonneg"] = ex.get("nonneg", True)
-
-    st.rerun()
-
-# Sidebar: Load examples 
-sidebar = st.sidebar
-sidebar.header("Examples")
-
-example_names = list(EXAMPLES.keys())
-selected_example = sidebar.selectbox(
-    "Choose an example to load",
-    ["(none)"] + example_names,
-    key="example_selector",
-)
-
-if selected_example != "(none)" and sidebar.button("Load example", key="load_example_btn"):
-    load_example(selected_example)
 
 # Z helpers 
 def _parse_single_z(text: str) -> float:
@@ -661,62 +599,3 @@ st.plotly_chart(
     use_container_width=True,
     config={"toImageButtonOptions": {"format": "png", "filename": "lp_graph"}}
 )
-
-# Sidebar: Saved solutions
-sidebar = st.sidebar
-sidebar.header("Saved solutions")
-
-# Only allow saving if we actually have a successful optimum
-if res.success and x_opt is not None and z_opt is not None:
-    default_label = f"{sense} Z with c₁={fmt(c1)}, c₂={fmt(c2)}"
-    save_label = sidebar.text_input(
-        "Label for this solution",
-        value=default_label,
-        key="save_label"
-    )
-
-    if sidebar.button("Save current solution", key="save_solution_btn"):
-
-        fig_for_save = fig
-
-        # Ensure consistent camera
-        fig_for_save.update_layout(
-            scene=dict(
-                camera=dict(eye=dict(x=1.6, y=1.6, z=0.9))
-            )
-        )
-
-        try:
-            img_bytes = fig_for_save.to_image(
-                format="png",
-                width=900,
-                height=700,
-                scale=2,
-            )
-        except Exception as e:
-            sidebar.warning(f"Could not export image: {e}")
-            img_bytes = None
-
-        st.session_state.saved_solutions.append(
-            {
-                "label": save_label,
-                "x1": float(x_opt[0]),
-                "x2": float(x_opt[1]),
-                "Z": float(z_opt),
-                "image": img_bytes,
-            }
-        )
-        sidebar.success("Solution saved.")
-
-
-# Show saved solutions
-for i, sol in enumerate(st.session_state.saved_solutions):
-    with sidebar.expander(sol["label"], expanded=False):
-        st.write(
-            f"x₁ = {fmt(sol['x1'])}, x₂ = {fmt(sol['x2'])}, Z = {fmt(sol['Z'])}"
-        )
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Delete", key=f"del_sol_{i}"):
-                st.session_state.saved_solutions.pop(i)
-                st.rerun()
