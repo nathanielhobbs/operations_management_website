@@ -1,7 +1,11 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import numpy as np
 import plotly.graph_objects as go
 from scipy.optimize import linprog
+from scipy.spatial import ConvexHull
+import html
+import json 
 
 st.set_page_config(layout="wide")
 
@@ -49,6 +53,92 @@ def add_constraint():
 def remove_constraint(i: int):
     if len(st.session_state.constraints) > 1:
         st.session_state.constraints.pop(i)
+
+
+# ---- Preset 1 (edit values here if you want different numbers) ----
+PRESET_1 = {
+    "c1": 2.0,
+    "c2": 3.0,
+    # List of (a1, a2, b) for each constraint
+    "constraints": [
+        (1.0, 2.0, 20.0),
+        (3.0, 1.0, 18.0),
+        (1.0, 1.0, 12.0),
+    ],
+}
+
+def apply_preset1():
+    # Objective coefficients
+    st.session_state.c1 = PRESET_1["c1"]
+    st.session_state.c2 = PRESET_1["c2"]
+    st.session_state.c1_input = PRESET_1["c1"]
+    st.session_state.c2_input = PRESET_1["c2"]
+
+    # Number of constraints
+    n = len(PRESET_1["constraints"])
+    st.session_state.constraints = n
+    st.session_state.constraints_input = n
+
+    # Sidebar constraint fields (a1_i, a2_i, b_i)
+    for i, (a1, a2, b) in enumerate(PRESET_1["constraints"]):
+        st.session_state[f"a1_{i}"] = float(a1)
+        st.session_state[f"a2_{i}"] = float(a2)
+        st.session_state[f"b_{i}"]  = float(b)
+
+def apply_preset_from_data(data: dict):
+    """Apply preset values from a dict loaded from a file."""
+    # Objective coefficients
+    st.session_state.c1 = float(data["c1"])
+    st.session_state.c2 = float(data["c2"])
+    st.session_state.c1_input = float(data["c1"])
+    st.session_state.c2_input = float(data["c2"])
+
+    # Number of constraints
+    constraints_list = data["constraints"]
+    n = len(constraints_list)
+    st.session_state.constraints = n
+    st.session_state.constraints_input = n
+
+    # Sidebar constraint fields (a1_i, a2_i, b_i)
+    for i, (a1, a2, b) in enumerate(constraints_list):
+        st.session_state[f"a1_{i}"] = float(a1)
+        st.session_state[f"a2_{i}"] = float(a2)
+        st.session_state[f"b_{i}"]  = float(b)
+
+
+# state flag for showing the uploader
+if "show_preset_upload" not in st.session_state:
+    st.session_state.show_preset_upload = False
+
+def handle_preset_from_file_button():
+    """
+    First click: show uploader.
+    Once a file is uploaded: second click applies preset and hides uploader.
+    """
+    if not st.session_state.show_preset_upload:
+        # first click -> just show the uploader
+        st.session_state.show_preset_upload = True
+    else:
+        uploaded = st.session_state.get("preset_file")
+        if uploaded is not None:
+            data = json.load(uploaded)
+            apply_preset_from_data(data)
+            # hide uploader again after applying
+            st.session_state.show_preset_upload = False
+
+
+# -----------------------------
+# Hide/Show Toggle ("Disappear" button)
+# -----------------------------
+# if "hide_all" not in st.session_state:
+#     st.session_state.hide_all = False
+
+# def toggle_visibility():
+#     st.session_state.hide_all = not st.session_state.hide_all
+
+# # Always show this button
+# st.button("Disappear / Reappear", on_click=toggle_visibility)
+
 
 # Z helpers 
 def _parse_single_z(text: str) -> float:
@@ -410,6 +500,49 @@ if show_obj:
         showscale=False,
         name="Objective Plane"
     ))
+
+    
+    feasible_points = np.column_stack((X1.flatten(), X2.flatten()))
+    feasible_points = feasible_points[mask.flatten().astype(bool)]
+
+    if len(feasible_points) > 2:
+        hull = ConvexHull(feasible_points)
+        hull_vertices = feasible_points[hull.vertices]
+
+        # Filled feasible region (green translucent area)
+        # fig.add_trace(go.Mesh3d(
+        #     x=hull_vertices[:, 0],
+        #     y=hull_vertices[:, 1],
+        #     z=np.zeros_like(hull_vertices[:, 0]),
+        #     color='green',
+        #     opacity=0.4,
+        #     name="Feasible Region",
+        #     alphahull=0,
+        #     showscale=False
+        # ))
+
+        # Outline of feasible region (dark green border)
+        # fig.add_trace(go.Scatter3d(
+        #     x=np.append(hull_vertices[:, 0], hull_vertices[0, 0]),
+        #     y=np.append(hull_vertices[:, 1], hull_vertices[0, 1]),
+        #     z=np.zeros(len(hull_vertices) + 1),
+        #     mode='lines',
+        #     line=dict(color='darkgreen', width=5),
+        #     name="Feasible Boundary"
+        # ))
+
+    # --- Projected feasible boundary onto the objective plane ---
+        z_plane = c1 * hull_vertices[:, 0] + c2 * hull_vertices[:, 1]
+        fig.add_trace(go.Scatter3d(
+            x=np.append(hull_vertices[:, 0], hull_vertices[0, 0]),
+            y=np.append(hull_vertices[:, 1], hull_vertices[0, 1]),
+            z=np.append(z_plane, z_plane[0]),
+            mode='lines',
+            line=dict(color='limegreen', width=5, dash='dot'),
+            name="Feasible Boundary (on Plane)"
+        ))
+
+
 
     # Feasible region overlay
     lift = 0.15
