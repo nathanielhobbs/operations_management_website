@@ -522,25 +522,25 @@ if show_obj:
         # ))
 
         # Outline of feasible region (dark green border)
-        # fig.add_trace(go.Scatter3d(
-        #     x=np.append(hull_vertices[:, 0], hull_vertices[0, 0]),
-        #     y=np.append(hull_vertices[:, 1], hull_vertices[0, 1]),
-        #     z=np.zeros(len(hull_vertices) + 1),
-        #     mode='lines',
-        #     line=dict(color='darkgreen', width=5),
-        #     name="Feasible Boundary"
-        # ))
-
-    # --- Projected feasible boundary onto the objective plane ---
-        z_plane = c1 * hull_vertices[:, 0] + c2 * hull_vertices[:, 1]
         fig.add_trace(go.Scatter3d(
             x=np.append(hull_vertices[:, 0], hull_vertices[0, 0]),
             y=np.append(hull_vertices[:, 1], hull_vertices[0, 1]),
-            z=np.append(z_plane, z_plane[0]),
+            z=np.zeros(len(hull_vertices) + 1),
             mode='lines',
-            line=dict(color='limegreen', width=5, dash='dot'),
-            name="Feasible Boundary (on Plane)"
+            line=dict(color='darkgreen', width=5),
+            name="Feasible Boundary"
         ))
+
+    # --- Projected feasible boundary onto the objective plane ---
+        # z_plane = c1 * hull_vertices[:, 0] + c2 * hull_vertices[:, 1]
+        # fig.add_trace(go.Scatter3d(
+        #     x=np.append(hull_vertices[:, 0], hull_vertices[0, 0]),
+        #     y=np.append(hull_vertices[:, 1], hull_vertices[0, 1]),
+        #     z=np.append(z_plane, z_plane[0]),
+        #     mode='lines',
+        #     line=dict(color='limegreen', width=5, dash='dot'),
+        #     name="Feasible Boundary (on Plane)"
+        # ))
 
 
 
@@ -554,34 +554,6 @@ if show_obj:
         showscale=False,
         name="Feasible Region"
     ))
-
-    # Constraint boundary lines
-    constraint_colors = [
-        "#d62728", "#2ca02c", "#1f77b4", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2"
-    ]
-    for idx, con in enumerate(st.session_state.constraints):
-        if not con.get("enabled", True):
-            continue
-        a1 = float(con["a1"]); a2 = float(con["a2"]); b = float(con["b"]); op = con["op"]
-
-        seg = constraint_segment(a1, a2, b, xmin, xmax, ymin, ymax)
-        if seg is None:
-            continue
-
-        (xA, yA), (xB, yB) = seg
-        zA = c1 * xA + c2 * yA
-        zB = c1 * xB + c2 * yB
-        dash = "solid" if op == "=" else "dash"
-
-        fig.add_trace(go.Scatter3d(
-            x=[xA, xB],
-            y=[yA, yB],
-            z=[zA, zB],
-            mode="lines",
-            line=dict(width=5, color=constraint_colors[idx % len(constraint_colors)], dash=dash),
-            name=f"Constraint {idx+1}: {a1:.2f}·x₁ + {a2:.2f}·x₂ {op} {b:.2f}",
-            hovertemplate="x₁=%{x:.3f}<br>x₂=%{y:.3f}<br>Z=%{z:.3f}<extra></extra>",
-        ))
     
     # Objective level lines (3D)
     if z_levels:
@@ -602,10 +574,12 @@ if show_obj:
                 hovertemplate="x₁=%{x:.3f}<br>x₂=%{y:.3f}<br>Z=%{z:.0f}<extra></extra>",
             ))
 
-    # Optimal solution marker
+    
     if res.success:
         x_opt = res.x
         z_opt = c1 * x_opt[0] + c2 * x_opt[1]
+
+        # Optimal solution marker
         fig.add_trace(go.Scatter3d(
             x=[x_opt[0]], y=[x_opt[1]], z=[z_opt + lift],
             mode="markers+text",
@@ -614,6 +588,39 @@ if show_obj:
             marker=dict(size=4, color="red"),
             name="Optimal Solution"
         ))
+
+        # Constraint boundary lines
+        constraint_colors = [
+            "#d62728", "#2ca02c", "#1f77b4", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2"
+        ]
+        for idx, con in enumerate(st.session_state.constraints):
+            if not con.get("enabled", True):
+                continue
+            a1 = float(con["a1"]); a2 = float(con["a2"]); b = float(con["b"]); op = con["op"]
+
+            seg = constraint_segment(a1, a2, b, xmin, xmax, ymin, ymax)
+            if seg is None:
+                continue
+
+            (xA, yA), (xB, yB) = seg
+            zA = c1 * xA + c2 * yA
+            zB = c1 * xB + c2 * yB
+            dash = "solid" if op == "=" else "dash"
+
+            lhs_opt = a1 * x_opt[0] + a2 * x_opt[1]
+            is_binding = abs(lhs_opt - b) <= 1e-3 # hard coded tolerance
+
+            width = 20 if is_binding else 5
+
+            fig.add_trace(go.Scatter3d(
+                x=[xA, xB],
+                y=[yA, yB],
+                z=[zA, zB],
+                mode="lines",
+                line=dict(width=20, color=constraint_colors[idx % len(constraint_colors)], dash=dash),
+                name=f"Constraint {idx+1}: {a1:.2f}·x₁ + {a2:.2f}·x₂ {op} {b:.2f}",
+                hovertemplate="x₁=%{x:.3f}<br>x₂=%{y:.3f}<br>Z=%{z:.3f}<extra></extra>",
+            ))
     else:
         st.error(f"Solve failed (status {res.status}): {res.message}")
 
@@ -628,6 +635,11 @@ if show_obj:
             yaxis_title="x₂",
             zaxis_title="Objective value (Z)",
             camera=camera,
+            # TODO: this "should" remove the mouse overlay lines, but it doesn't seem to be working
+            # zaxis=dict(range=[0, np.max(Z)], showspikes=False),
+            # xaxis=dict(showspikes=False),
+            # yaxis=dict(showspikes=False)
+
         ),
         template="plotly_dark",                  
         paper_bgcolor="rgba(0, 0, 0, 1)",         # dark background
