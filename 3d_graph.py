@@ -133,7 +133,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- Z level input (optional) ---
+# xxZ level input (optional)
 def _parse_z_levels(s: str) -> list[float]:
     vals = []
     for tok in s.replace(";", ",").split(","):
@@ -153,7 +153,7 @@ def _parse_z_levels(s: str) -> list[float]:
             seen.add(v); out.append(v)
     return out
 
-# ==== Objective level lines (Z) ====
+# Objective level lines (Z)
 st.subheader("Objective level lines")
 
 # Header row: "Z =" input on left, "Add Z value" button on right
@@ -510,7 +510,7 @@ else:
     # 2D MODE
     fig = go.Figure()
 
-    # Feasible region shading (2D) — FIXED
+    # Feasible region shading (2D)
     feas_numeric = np.where(mask, 1.0, np.nan)
     fig.add_trace(go.Heatmap(
         x=x1, y=x2, z=feas_numeric,   # ← was feas_numeric.T
@@ -585,7 +585,7 @@ else:
     fig.update_layout(
         xaxis_title="x₁",
         yaxis_title="x₂",
-        template="plotly_dark",             # dark
+        template="plotly_dark",             
         paper_bgcolor="rgba(0, 0, 0, 1)",
         plot_bgcolor="rgba(0, 0, 0, 1)",
         margin=dict(l=0, r=0, t=40, b=0),
