@@ -1,0 +1,29 @@
+Use GLPK for Excel-style ranges (glpsol --ranges via PuLP/Pyomo).
+
+Use HiGHS/CBC for fast LP/MIP (no “ranges” report).
+
+Use Ipopt for nonlinear (Pyomo).
+
+================
+Mac
+================
+brew install glpk highs cbc ipopt
+
+
+================
+Windows
+================
+conda install -c conda-forge glpk coincbc ipopt highspy
+
+
+
+================
+Verify (Mac/Windows/Linux)
+================
+
+glpsol --version
+highs --version
+cbc --version
+ipopt -v
+
+

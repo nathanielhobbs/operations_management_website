@@ -1,0 +1,29 @@
+GLPK 5.0  - SENSITIVITY ANALYSIS REPORT                                                                         Page   1
+
+Problem:    
+Objective:  OBJ = 24.8 (MAXimum)
+
+   No. Row name     St      Activity         Slack   Lower bound       Activity      Obj coef  Obj value at Limiting
+                                          Marginal   Upper bound          range         range   break point variable
+------ ------------ -- ------------- ------------- -------------  ------------- ------------- ------------- ------------
+     1 _C1          NU      10.00000        .               -Inf        4.00000       -.80000      20.00000 x
+                                            .80000      10.00000       24.00000          +Inf      36.00000 y
+
+     2 _C2          NU      12.00000        .               -Inf        5.00000      -1.40000      15.00000 y
+                                           1.40000      12.00000       30.00000          +Inf      50.00000 x
+
+GLPK 5.0  - SENSITIVITY ANALYSIS REPORT                                                                         Page   2
+
+Problem:    
+Objective:  OBJ = 24.8 (MAXimum)
+
+   No. Column name  St      Activity      Obj coef   Lower bound       Activity      Obj coef  Obj value at Limiting
+                                          Marginal   Upper bound          range         range   break point variable
+------ ------------ -- ------------- ------------- -------------  ------------- ------------- ------------- ------------
+     1 x            BS       3.60000       3.00000        .                -Inf       1.66667      20.00000 _C1
+                                            .               +Inf        5.00000      10.00000      50.00000 _C2
+
+     2 y            BS       2.80000       5.00000        .                -Inf       1.50000      15.00000 _C2
+                                            .               +Inf        4.00000       9.00000      36.00000 _C1
+
+End of report

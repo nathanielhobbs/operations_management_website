@@ -1,0 +1,5 @@
+# for exisiting main branch functionality
+pip install scipy streamlit
+
+# for sensitivity analysis
+python -m pip install -U pulp pyomo 
