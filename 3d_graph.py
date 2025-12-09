@@ -28,23 +28,6 @@ def fmt(num):
     """Return an int if whole number, else a rounded float."""
     return int(num) if float(num).is_integer() else round(num, 2)
 
-def num_input_no_step(label: str, default: float | int, key: str, disabled: bool = False) -> float:
-    # If the widget already has a value in session_state, let Streamlit use that.
-    # Otherwise, provide the initial default.
-    if key in st.session_state:
-        s = st.text_input(label, key=key, disabled=disabled)
-    else:
-        s = st.text_input(label, value=str(default), key=key, disabled=disabled)
-
-    try:
-        return float(str(s).strip())
-    except ValueError:
-        # If disabled, keep default without erroring
-        if disabled:
-            return float(default)
-        st.error(f"Enter a valid number for {label}.")
-        st.stop()
-
 def add_constraint():
     st.session_state.constraints.append(
         {"a1": 1.0, "a2": 1.0, "op": "≤", "b": 10.0, "enabled": True}
@@ -200,7 +183,12 @@ with colA:
 with colB:
     _c1_l, _c1_r = st.columns([1, 0.25])
     with _c1_l:
-        c1 = num_input_no_step("c₁ (coefficient of x₁)", 2.0, "c1")
+        c1 = st.number_input(
+            "c₁ (coefficient of x₁)",
+            value=st.session_state.get("c1", 2.0),
+            key="c1",
+            format="%.4f",
+        )
     with _c1_r:
         st.markdown("<div style='margin-top:1.9rem;'>x₁</div>", unsafe_allow_html=True)
 
@@ -211,7 +199,12 @@ with colPlus:
 with colC:
     _c2_l, _c2_r = st.columns([1, 0.25])
     with _c2_l:
-        c2 = num_input_no_step("c₂ (coefficient of x₂)", 3.0, "c2")
+        c2 = st.number_input(
+            "c₂ (coefficient of x₂)",
+            value=st.session_state.get("c2", 3.0),
+            key="c2",
+            format="%.4f",
+        )
     with _c2_r:
         st.markdown("<div style='margin-top:1.9rem;'>x₂</div>", unsafe_allow_html=True)
 
@@ -306,8 +299,12 @@ for i, con in enumerate(st.session_state.constraints):
     )
 
     with c_a1:
-        st.session_state.constraints[i]["a1"] = num_input_no_step(
-            "a₁ (coefficient of x₁)", con["a1"], f"a1_{i}", disabled=not row_enabled
+        st.session_state.constraints[i]["a1"] = st.number_input(
+            "a₁ (coefficient of x₁)",
+            value=float(con["a1"]),
+            key=f"a1_{i}",
+            disabled=not row_enabled,
+            format="%.4f",
         )
     with c_x1:
         st.markdown("<div style='margin-top:1.9rem;'>x₁</div>", unsafe_allow_html=True)
@@ -316,8 +313,12 @@ for i, con in enumerate(st.session_state.constraints):
         st.markdown("<div style='margin-top:1.9rem;'>+</div>", unsafe_allow_html=True)
 
     with c_a2:
-        st.session_state.constraints[i]["a2"] = num_input_no_step(
-            "a₂ (coefficient of x₂)", con["a2"], f"a2_{i}", disabled=not row_enabled
+        st.session_state.constraints[i]["a2"] = st.number_input(
+            "a₂ (coefficient of x₂)",
+            value=float(con["a2"]),
+            key=f"a2_{i}",
+            disabled=not row_enabled,
+            format="%.4f",
         )
     with c_x2:
         st.markdown("<div style='margin-top:1.9rem;'>x₂</div>", unsafe_allow_html=True)
@@ -328,8 +329,12 @@ for i, con in enumerate(st.session_state.constraints):
         )
 
     with c_b:
-        st.session_state.constraints[i]["b"] = num_input_no_step(
-            "b (RHS)", con["b"], f"b_{i}", disabled=not row_enabled
+        st.session_state.constraints[i]["a2"] = st.number_input(
+            "a₂ (coefficient of x₂)",
+            value=float(con["a2"]),
+            key=f"a2_{i}",
+            disabled=not row_enabled,
+            format="%.4f",
         )
 
     with c_act:
