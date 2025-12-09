@@ -11,7 +11,10 @@ st.set_page_config(layout="wide")
 
 # Session state (dynamic constraints)
 if "constraints" not in st.session_state:
-    st.session_state.constraints = [{"a1": 1.0, "a2": 1.0, "op": "≤", "b": 10.0, "enabled": True}]
+    st.session_state.constraints = [
+            {"a1": 1.0, "a2": 2.0, "op": "≤", "b": 40.0, "enabled": True},
+            {"a1": 4.0, "a2": 3.0, "op": "≤", "b": 120.0, "enabled": True},
+            ]
 else:
     # Migration: add enabled flag if missing
     for con in st.session_state.constraints:
@@ -27,23 +30,6 @@ OPS = ["<", "≤", "=", "≥", ">"]
 def fmt(num):
     """Return an int if whole number, else a rounded float."""
     return int(num) if float(num).is_integer() else round(num, 2)
-
-def num_input_no_step(label: str, default: float | int, key: str, disabled: bool = False) -> float:
-    # If the widget already has a value in session_state, let Streamlit use that.
-    # Otherwise, provide the initial default.
-    if key in st.session_state:
-        s = st.text_input(label, key=key, disabled=disabled)
-    else:
-        s = st.text_input(label, value=str(default), key=key, disabled=disabled)
-
-    try:
-        return float(str(s).strip())
-    except ValueError:
-        # If disabled, keep default without erroring
-        if disabled:
-            return float(default)
-        st.error(f"Enter a valid number for {label}.")
-        st.stop()
 
 def add_constraint():
     st.session_state.constraints.append(
@@ -140,225 +126,208 @@ def handle_preset_from_file_button():
 # st.button("Disappear / Reappear", on_click=toggle_visibility)
 
 
-# Z helpers 
-def _parse_single_z(text: str) -> float:
-    s = str(text).strip()
-    s = s.replace(",", "")
-    s = s.replace("Z=", "").replace("z=", "").replace("Z", "").replace("z", "")
-    s = s.strip()
-    return float(s)
+import streamlit as st
 
-def remove_z(i: int):
-    if 0 <= i < len(st.session_state.z_levels):
-        st.session_state.z_levels.pop(i)
+# top-level layout: LP pretty print on the left, controls on the right
+col_pretty, col_controls = st.columns([1, 2], gap="large")
 
-def _add_z_from_state():
-    try:
-        z_val = _parse_single_z(st.session_state.get("z_input", ""))
-        if not np.isfinite(z_val):
-            st.warning("Please enter a finite number for Z."); return
-        if not any(abs(z_val - z) < 1e-12 for z in st.session_state.z_levels):
-            st.session_state.z_levels.append(z_val)
-            st.success(f"Added Z = {fmt(z_val)}")
+with col_controls:
+    # Objective Function UI with x₁/x₂ labels next to inputs
+    colA, colB, colPlus, colC, colD = st.columns([1.2, 1.4, 0.2, 1.4, 1.6])
+
+    with colA:
+        st.subheader("Objective Function")
+        if "sense" in st.session_state:
+            sense = st.radio(
+                "Objective direction",
+                ["Maximize", "Minimize"],
+                horizontal=True,
+                key="sense",
+                label_visibility="collapsed",
+            )
         else:
-            st.info("That Z value is already in the list.")
-    except Exception:
-        st.warning("Enter a numeric Z (e.g., 5000).")
-    finally:
-        st.session_state["z_input"] = ""
-
-def remove_z(i: int):
-    if 0 <= i < len(st.session_state.z_levels):
-        st.session_state.z_levels.pop(i)
-
-# Objective Function UI
-st.subheader("Objective Function")
-
-# Objective Function UI with x₁/x₂ labels next to inputs
-colA, colB, colPlus, colC, colD = st.columns([1.2, 1.4, 0.2, 1.4, 1.6])
-
-with colA:
-    if "sense" in st.session_state:
-        sense = st.radio(
-            "Objective direction",
-            ["Maximize", "Minimize"],
-            horizontal=True,
-            key="sense",
-            label_visibility="collapsed",
-        )
-    else:
-        sense = st.radio(
-            "Objective direction",
-            ["Maximize", "Minimize"],
-            horizontal=True,
-            index=0,
-            key="sense",
-            label_visibility="collapsed",
-        )
-
-# c1 · x1
-with colB:
-    _c1_l, _c1_r = st.columns([1, 0.25])
-    with _c1_l:
-        c1 = num_input_no_step("c₁ (coefficient of x₁)", 2.0, "c1")
-    with _c1_r:
-        st.markdown("<div style='margin-top:1.9rem;'>x₁</div>", unsafe_allow_html=True)
-
-with colPlus:
-    st.markdown("<div style='margin-top:1.9rem;'>+</div>", unsafe_allow_html=True)
-
-# c2 · x2
-with colC:
-    _c2_l, _c2_r = st.columns([1, 0.25])
-    with _c2_l:
-        c2 = num_input_no_step("c₂ (coefficient of x₂)", 3.0, "c2")
-    with _c2_r:
-        st.markdown("<div style='margin-top:1.9rem;'>x₂</div>", unsafe_allow_html=True)
-
-with colD:
-    show_obj = st.checkbox("Show in 3D", value=True, key="show_obj_cb")
-
-st.markdown(
-    f"<p style='font-size:1.4rem; font-weight:600;'>Objective: Z = {c1}·x₁ + {c2}·x₂</p>",
-    unsafe_allow_html=True,
-)
-
-# --- Z level input (optional) ---
-def _parse_z_levels(s: str) -> list[float]:
-    vals = []
-    for tok in s.replace(";", ",").split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        try:
-            v = float(tok)
-            if np.isfinite(v):
-                vals.append(v)
-        except ValueError:
-            pass
-    # de-dupe, keep order
-    seen, out = set(), []
-    for v in vals:
-        if v not in seen:
-            seen.add(v); out.append(v)
-    return out
-
-# ==== Objective level lines (Z) ====
-st.subheader("Objective level lines")
-
-# Header row: "Z =" input on left, "Add Z value" button on right
-left, mid, right = st.columns([0.15, 0.65, 0.20])
-
-with left:
-    st.markdown("<div style='margin-top:0.6rem;'>Z =</div>", unsafe_allow_html=True)
-
-with mid:
-    if "z_input" in st.session_state:
-        st.text_input(
-            "Z value",
-            key="z_input",
-            label_visibility="collapsed",
-        )
-    else:
-        st.text_input(
-            "Z value",
-            value="",
-            key="z_input",
-            label_visibility="collapsed",
-        )
-
-with right:
-    st.button("Add Z value", key="add_z_btn", use_container_width=True, on_click=_add_z_from_state)
-
-# Existing Z values list
-if st.session_state.z_levels:
-    st.markdown("**Current Z values**")
-    for idx, z in enumerate(st.session_state.z_levels):
-        col_txt, col_rm = st.columns([0.85, 0.15])
-        with col_txt:
-            st.markdown(f"- **Z = {fmt(z)}**")
-        with col_rm:
-            st.button("Remove", key=f"delz_{idx}", use_container_width=True,
-                      on_click=lambda i=idx: remove_z(i))
-
-# Expose list for plotting branches
-z_levels = st.session_state.z_levels
-
-st.divider()
-
-# Constraints (Subject to)
-st.subheader("subject to")
-st.caption("Enter each constraint as a₁·x₁ + a₂·x₂ (operation) b")
-# Top-level Add button (right aligned)
-_sp, top_right = st.columns([3, 1])
-with top_right:
-    st.button("Add constraint", use_container_width=True, on_click=add_constraint)
-
-for i, con in enumerate(st.session_state.constraints):
-    # Row enabled toggle
-    enabled_key = f"enabled_{i}"
-    
-    row_enabled = st.session_state.constraints[i]["enabled"]
-
-    # Layout: a1 [x1] + a2 [x2] (op) b  [buttons]
-    c_a1, c_x1, c_plus, c_a2, c_x2, c_op, c_b, c_act = st.columns(
-        [1.1, 0.25, 0.2, 1.1, 0.25, 0.7, 1.1, 1.4]
-    )
-
-    with c_a1:
-        st.session_state.constraints[i]["a1"] = num_input_no_step(
-            "a₁ (coefficient of x₁)", con["a1"], f"a1_{i}", disabled=not row_enabled
-        )
-    with c_x1:
-        st.markdown("<div style='margin-top:1.9rem;'>x₁</div>", unsafe_allow_html=True)
-
-    with c_plus:
-        st.markdown("<div style='margin-top:1.9rem;'>+</div>", unsafe_allow_html=True)
-
-    with c_a2:
-        st.session_state.constraints[i]["a2"] = num_input_no_step(
-            "a₂ (coefficient of x₂)", con["a2"], f"a2_{i}", disabled=not row_enabled
-        )
-    with c_x2:
-        st.markdown("<div style='margin-top:1.9rem;'>x₂</div>", unsafe_allow_html=True)
-
-    with c_op:
-        st.session_state.constraints[i]["op"] = st.selectbox(
-            "Operator", OPS, index=OPS.index(con["op"]), key=f"op_{i}", disabled=not row_enabled
-        )
-
-    with c_b:
-        st.session_state.constraints[i]["b"] = num_input_no_step(
-            "b (RHS)", con["b"], f"b_{i}", disabled=not row_enabled
-        )
-
-    with c_act:
-        st.markdown("<div style='height:1.9em'></div>", unsafe_allow_html=True)
-        enable_col, remove_col = st.columns([1, 1])
-
-        with enable_col:
-            st.session_state.constraints[i]["enabled"] = st.checkbox(
-                "Enable", value=con["enabled"], key=f"enabled_{i}"
+            sense = st.radio(
+                "Objective direction",
+                ["Maximize", "Minimize"],
+                horizontal=True,
+                index=0,
+                key="sense",
+                label_visibility="collapsed",
             )
 
-        with remove_col:
-            st.button("Remove", key=f"remove_{i}", use_container_width=True,
-                    on_click=lambda idx=i: remove_constraint(idx))
+    # c1 · x1
+    with colB:
+        _c1_l, _c1_r = st.columns([1, 0.25])
+        with _c1_l:
+            c1 = st.number_input(
+                "c₁ (coefficient of x₁)",
+                value=st.session_state.get("c1", 40.0),
+                key="c1",
+                format="%.1f",
+            )
+        with _c1_r:
+            st.markdown("<div style='margin-top:1.9rem;'>x₁</div>", unsafe_allow_html=True)
+
+    with colPlus:
+        st.markdown("<div style='margin-top:1.9rem;'>+</div>", unsafe_allow_html=True)
+
+    # c2 · x2
+    with colC:
+        _c2_l, _c2_r = st.columns([1, 0.25])
+        with _c2_l:
+            c2 = st.number_input(
+                "c₂ (coefficient of x₂)",
+                value=st.session_state.get("c2", 50.0),
+                key="c2",
+                format="%.1f",
+            )
+        with _c2_r:
+            st.markdown("<div style='margin-top:1.9rem;'>x₂</div>", unsafe_allow_html=True)
+
+    with colD:
+        show_obj = st.checkbox("Show in 3D", value=True, key="show_obj_cb")
+
+
+    # Constraints (Subject to)
+    st.subheader("subject to")
+    st.caption("Enter each constraint as a₁·x₁ + a₂·x₂ (operation) b")
+    for i, con in enumerate(st.session_state.constraints):
+        # Row enabled toggle
+        enabled_key = f"enabled_{i}"
+        
+        row_enabled = st.session_state.constraints[i]["enabled"]
+
+        # Layout: a1 [x1] + a2 [x2] (op) b  [buttons]
+        c_a1, c_x1, c_plus, c_a2, c_x2, c_op, c_b, c_act = st.columns(
+            [1.1, 0.25, 0.2, 1.1, 0.25, 0.7, 1.1, 1.4]
+        )
+
+        with c_a1:
+            st.session_state.constraints[i]["a1"] = st.number_input(
+                "a₁ (coefficient of x₁)",
+                value=float(con["a1"]),
+                key=f"a1_{i}",
+                disabled=not row_enabled,
+                format="%.1f",
+            )
+        with c_x1:
+            st.markdown("<div style='margin-top:1.9rem;'>x₁</div>", unsafe_allow_html=True)
+
+        with c_plus:
+            st.markdown("<div style='margin-top:1.9rem;'>+</div>", unsafe_allow_html=True)
+
+        with c_a2:
+            st.session_state.constraints[i]["a2"] = st.number_input(
+                "a₂ (coefficient of x₂)",
+                value=float(con["a2"]),
+                key=f"a2_{i}",
+                disabled=not row_enabled,
+                format="%.1f",
+            )
+        with c_x2:
+            st.markdown("<div style='margin-top:1.9rem;'>x₂</div>", unsafe_allow_html=True)
+
+        with c_op:
+            st.session_state.constraints[i]["op"] = st.selectbox(
+                "Operator", OPS, index=OPS.index(con["op"]), key=f"op_{i}", disabled=not row_enabled
+            )
+
+        with c_b:
+            st.session_state.constraints[i]["b"] = st.number_input(
+                "b (RHS)",
+                value=float(con["b"]),
+                key=f"b_{i}",
+                disabled=not row_enabled,
+                format="%.1f",
+            )
+
+        with c_act:
+            st.markdown("<div style='height:1.9em'></div>", unsafe_allow_html=True)
+            enable_col, remove_col = st.columns([1, 1])
+
+            with enable_col:
+                st.session_state.constraints[i]["enabled"] = st.checkbox(
+                    "Enable", value=con["enabled"], key=f"enabled_{i}"
+                )
+
+            with remove_col:
+                st.button("Remove", key=f"remove_{i}", use_container_width=True,
+                        on_click=lambda idx=i: remove_constraint(idx))
+
+    # Top-level Add button (right aligned)
+    _sp, top_right = st.columns([3, 1])
+    with top_right:
+        st.button("Add constraint", use_container_width=True, on_click=add_constraint)
 
 
 
-# Non-negativity in constraint section
-if "nonneg" in st.session_state:
-    nonneg = st.checkbox(
-        "Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)",
-        key="nonneg",
-    )
-else:
-    nonneg = st.checkbox(
-        "Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)",
-        value=True,
-        key="nonneg",
-    )
+    # Non-negativity in constraint section
+    if "nonneg" in st.session_state:
+        nonneg = st.checkbox(
+            "Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)",
+            key="nonneg",
+        )
+    else:
+        nonneg = st.checkbox(
+            "Enforce non-negativity (x₁ ≥ 0, x₂ ≥ 0)",
+            value=True,
+            key="nonneg",
+        )
+def format_objective_latex(c1, c2, maximize: bool) -> str:
+    sense = r"\text{Maximize}" if maximize else r"\text{Minimize}"
+    return rf"{sense}\ Z = {c1:.1f}x_1 + {c2:.1f}x_2"
+
+def format_constraint_latex(a1, a2, op, b) -> str:
+    # map UI op to LaTeX symbol
+    op_map = {"≤": r"\le", "=": "=", "≥": r"\ge"}
+    return rf"{a1:.1f}x_1 + {a2:.1f}x_2 {op_map[op]} {b:.1f}"
+
+with col_pretty:
+    st.markdown("### Current Problem")
+
+    maximize = sense
+    obj_latex = format_objective_latex(c1, c2, maximize)
+
+    cons_latex = []
+    for i, con in enumerate(st.session_state.constraints):
+    
+        a1_temp = st.session_state.constraints[i]["a1"]
+        a2_temp = st.session_state.constraints[i]["a2"]
+        op_temp = st.session_state.constraints[i]["op"]
+        b_temp = st.session_state.constraints[i]["b"]
+
+        cons_latex.append(format_constraint_latex(a1_temp, a2_temp, op_temp, b_temp))
+
+    st.latex(obj_latex)
+    st.latex(r"\text{subject to}")
+    for c_ltx in cons_latex:
+        st.latex(c_ltx)
+
+    # nonnegativity:
+    if nonneg:
+        st.latex(r"x_1 \ge 0,\quad x_2 \ge 0")
+
+# with col_pretty:
+#     st.markdown(
+#         f"<p style='font-size:1.4rem; font-weight:600;'>Objective: Z = {c1}·x₁ + {c2}·x₂</p>",
+#         unsafe_allow_html=True,
+#     )
+#
+#     st.markdown(
+#         f"<p style='font-size:1.4rem; font-weight:600;'>Subject to:</p>",
+#         unsafe_allow_html=True,
+#     )
+#     for i, con in enumerate(st.session_state.constraints):
+#
+#         a1_temp = st.session_state.constraints[i]["a1"]
+#         a2_temp = st.session_state.constraints[i]["a2"]
+#         op_temp = st.session_state.constraints[i]["op"]
+#         b_temp = st.session_state.constraints[i]["b"]
+#
+#         st.markdown(
+#             f"<p style='font-size:1.4rem; font-weight:600;'>{a1_temp}·x₁ + {a2_temp}·x₂ {op_temp} {b_temp}</p>",
+#             unsafe_allow_html=True,
+#         )
 
 # Converting ops to standard LP matrices
 def to_standard_matrices():
@@ -485,6 +454,100 @@ def constraint_segment(a1, a2, b, xmin, xmax, ymin, ymax):
 # will hold current optimal solution (if any)
 x_opt = None
 z_opt = None
+
+# --- Z level input (optional) ---
+def _parse_z_levels(s: str) -> list[float]:
+    vals = []
+    for tok in s.replace(";", ",").split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            v = float(tok)
+            if np.isfinite(v):
+                vals.append(v)
+        except ValueError:
+            pass
+    # de-dupe, keep order
+    seen, out = set(), []
+    for v in vals:
+        if v not in seen:
+            seen.add(v); out.append(v)
+    return out
+
+# Z helpers 
+def _parse_single_z(text: str) -> float:
+    s = str(text).strip()
+    s = s.replace(",", "")
+    s = s.replace("Z=", "").replace("z=", "").replace("Z", "").replace("z", "")
+    s = s.strip()
+    return float(s)
+
+def remove_z(i: int):
+    if 0 <= i < len(st.session_state.z_levels):
+        st.session_state.z_levels.pop(i)
+
+def _add_z_from_state():
+    try:
+        z_val = _parse_single_z(st.session_state.get("z_input", ""))
+        if not np.isfinite(z_val):
+            st.warning("Please enter a finite number for Z."); return
+        if not any(abs(z_val - z) < 1e-12 for z in st.session_state.z_levels):
+            st.session_state.z_levels.append(z_val)
+            st.success(f"Added Z = {fmt(z_val)}")
+        else:
+            st.info("That Z value is already in the list.")
+    except Exception:
+        st.warning("Enter a numeric Z (e.g., 5000).")
+    finally:
+        st.session_state["z_input"] = ""
+
+def remove_z(i: int):
+    if 0 <= i < len(st.session_state.z_levels):
+        st.session_state.z_levels.pop(i)
+
+
+# ==== Objective level lines (Z) ====
+st.subheader("Objective level lines")
+
+# Header row: "Z =" input on left, "Add Z value" button on right
+left, mid, right = st.columns([0.15, 0.65, 0.20])
+
+with left:
+    st.markdown("<div style='margin-top:0.6rem;'>Z =</div>", unsafe_allow_html=True)
+
+with mid:
+    if "z_input" in st.session_state:
+        st.text_input(
+            "Z value",
+            key="z_input",
+            label_visibility="collapsed",
+        )
+    else:
+        st.text_input(
+            "Z value",
+            value="",
+            key="z_input",
+            label_visibility="collapsed",
+        )
+
+with right:
+    st.button("Add Z value", key="add_z_btn", use_container_width=True, on_click=_add_z_from_state)
+
+# Existing Z values list
+if st.session_state.z_levels:
+    st.markdown("**Current Z values**")
+    for idx, z in enumerate(st.session_state.z_levels):
+        col_txt, col_rm = st.columns([0.85, 0.15])
+        with col_txt:
+            st.markdown(f"- **Z = {fmt(z)}**")
+        with col_rm:
+            st.button("Remove", key=f"delz_{idx}", use_container_width=True,
+                      on_click=lambda i=idx: remove_z(i))
+
+# Expose list for plotting branches
+z_levels = st.session_state.z_levels
+
 
 # Build Plotly Figure (3D if show_obj, else 2D)
 if show_obj:
