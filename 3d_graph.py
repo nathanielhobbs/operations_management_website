@@ -6,6 +6,17 @@ from scipy.optimize import linprog
 from scipy.spatial import ConvexHull
 import html
 import json 
+from types import SimpleNamespace
+from pyomo.environ import (
+    ConcreteModel, Var, Objective, ConstraintList, NonNegativeReals, Reals,
+    maximize, minimize, SolverFactory, Suffix, value
+)
+from pyomo.opt import SolverStatus, TerminationCondition
+
+LE_OPS = {"<", "<=", "≤", "â‰¤"}
+GE_OPS = {">", ">=", "≥", "â‰¥"}
+EQ_OPS = {"="}
+
 
 st.set_page_config(layout="wide")
 
@@ -360,32 +371,140 @@ else:
         key="nonneg",
     )
 
-# Converting ops to standard LP matrices
-def to_standard_matrices():
-    A_ub, b_ub, A_eq, b_eq = [], [], [], []
-    for con in st.session_state.constraints:
+#--------------------------------------------------------------------------------------------------
+# # Converting ops to standard LP matrices
+# def to_standard_matrices():
+#     A_ub, b_ub, A_eq, b_eq = [], [], [], []
+#     for con in st.session_state.constraints:
+#         if not con.get("enabled", True):
+#             continue
+#         a1 = float(con["a1"]); a2 = float(con["a2"]); b = float(con["b"]); op = con["op"]
+#         if op in ("<", "≤"):
+#             A_ub.append([a1, a2]); b_ub.append(b)
+#         elif op in (">", "≥"):
+#             A_ub.append([-a1, -a2]); b_ub.append(-b)
+#         else:  # "="
+#             A_eq.append([a1, a2]); b_eq.append(b)
+#     A_ub = np.array(A_ub) if A_ub else None
+#     b_ub = np.array(b_ub) if b_ub else None
+#     A_eq = np.array(A_eq) if A_eq else None
+#     b_eq = np.array(b_eq) if b_eq else None
+#     return A_ub, b_ub, A_eq, b_eq
+
+# # Solve LP
+# A_ub, b_ub, A_eq, b_eq = to_standard_matrices()
+# c = np.array([c1, c2])
+# c_obj = -c if sense == "Maximize" else c
+# bounds = [(0, None), (0, None)] if nonneg else [(None, None), (None, None)]
+
+# res = linprog(c_obj, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
+#---------------------------------------------------------------------------------------------------------
+
+def solve_lp_with_pyomo(c1, c2, sense, nonneg, constraints, write_ranges=False, ranges_file="sens.txt"):
+    m = ConcreteModel()
+
+    var_domain = NonNegativeReals if nonneg else Reals
+    m.x1 = Var(domain=var_domain)
+    m.x2 = Var(domain=var_domain)
+
+    m.obj = Objective(
+        expr=c1 * m.x1 + c2 * m.x2,
+        sense=maximize if sense == "Maximize" else minimize
+    )
+
+    m.cons = ConstraintList()
+    con_meta = []  # store index + expression metadata for reporting
+
+    for i, con in enumerate(constraints):
         if not con.get("enabled", True):
             continue
-        a1 = float(con["a1"]); a2 = float(con["a2"]); b = float(con["b"]); op = con["op"]
-        if op in ("<", "≤"):
-            A_ub.append([a1, a2]); b_ub.append(b)
-        elif op in (">", "≥"):
-            A_ub.append([-a1, -a2]); b_ub.append(-b)
-        else:  # "="
-            A_eq.append([a1, a2]); b_eq.append(b)
-    A_ub = np.array(A_ub) if A_ub else None
-    b_ub = np.array(b_ub) if b_ub else None
-    A_eq = np.array(A_eq) if A_eq else None
-    b_eq = np.array(b_eq) if b_eq else None
-    return A_ub, b_ub, A_eq, b_eq
 
-# Solve LP
-A_ub, b_ub, A_eq, b_eq = to_standard_matrices()
-c = np.array([c1, c2])
-c_obj = -c if sense == "Maximize" else c
-bounds = [(0, None), (0, None)] if nonneg else [(None, None), (None, None)]
+        a1 = float(con["a1"])
+        a2 = float(con["a2"])
+        b = float(con["b"])
+        op = con["op"]
 
-res = linprog(c_obj, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
+        lhs = a1 * m.x1 + a2 * m.x2
+        if op in LE_OPS:
+            m.cons.add(lhs <= b)
+        elif op in GE_OPS:
+            m.cons.add(lhs >= b)
+        elif op in EQ_OPS:
+            m.cons.add(lhs == b)
+        else:
+            return SimpleNamespace(success=False, status=-1, message=f"Unsupported operator: {op}", x=None), None
+
+        con_meta.append({"idx": i + 1, "a1": a1, "a2": a2, "b": b, "op": op, "con_obj": m.cons[len(m.cons)]})
+
+    # Sensitivity suffixes
+    m.dual = Suffix(direction=Suffix.IMPORT)  # shadow prices
+    m.rc = Suffix(direction=Suffix.IMPORT)    # reduced costs
+
+    opt = SolverFactory("glpk")
+    if not opt.available(exception_flag=False):
+        return SimpleNamespace(success=False, status=-1, message="GLPK solver not available (glpsol not found).", x=None), None
+
+    if write_ranges:
+        opt.options["ranges"] = ranges_file
+
+    py_res = opt.solve(
+        m,
+        tee=False,
+        keepfiles=bool(write_ranges),
+        symbolic_solver_labels=bool(write_ranges)
+    )
+
+    ok = (
+        py_res.solver.status == SolverStatus.ok and
+        py_res.solver.termination_condition == TerminationCondition.optimal
+    )
+
+    if not ok:
+        msg = f"{py_res.solver.status} / {py_res.solver.termination_condition}"
+        return SimpleNamespace(success=False, status=-1, message=msg, x=None), None
+
+    x_opt = np.array([float(value(m.x1)), float(value(m.x2))])
+
+    # Build sensitivity report
+    sens = {
+        "reduced_costs": {
+            "x1": float(m.rc.get(m.x1, np.nan)),
+            "x2": float(m.rc.get(m.x2, np.nan)),
+        },
+        "constraints": []
+    }
+
+    for row in con_meta:
+        c = row["con_obj"]
+        lhs_val = float(value(c.body))
+        lb = None if c.lower is None else float(value(c.lower))
+        ub = None if c.upper is None else float(value(c.upper))
+
+        sens["constraints"].append({
+            "constraint_index": row["idx"],
+            "expr": f"{row['a1']}*x1 + {row['a2']}*x2 {row['op']} {row['b']}",
+            "shadow_price": float(m.dual.get(c, 0.0)),
+            "lhs_value": lhs_val,
+            "lower_bound": lb,
+            "upper_bound": ub,
+            "slack_to_upper": (ub - lhs_val) if ub is not None else None,
+            "slack_to_lower": (lhs_val - lb) if lb is not None else None,
+        })
+
+    # Match your existing downstream usage: res.success, res.x, res.status, res.message
+    return SimpleNamespace(success=True, status=0, message="Optimal", x=x_opt), sens
+
+
+# ---- call it where you currently do linprog ----
+res, sensitivity = solve_lp_with_pyomo(
+    c1=c1,
+    c2=c2,
+    sense=sense,
+    nonneg=nonneg,
+    constraints=st.session_state.constraints,
+    write_ranges=True,          # set False if you do not want sens.txt
+    ranges_file="sens.txt"
+)
 
 def compute_axis_max(constraints, safety: float = 1.1) -> float:
     """
@@ -744,3 +863,8 @@ st.plotly_chart(
     use_container_width=True,
     config={"toImageButtonOptions": {"format": "png", "filename": "lp_graph"}}
 )
+
+if sensitivity is not None:
+    st.subheader("Sensitivity analysis (Pyomo + GLPK)")
+    st.write("Reduced costs:", sensitivity["reduced_costs"])
+    st.dataframe(sensitivity["constraints"], use_container_width=True)
